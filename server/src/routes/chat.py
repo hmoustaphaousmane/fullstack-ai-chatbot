@@ -1,5 +1,8 @@
 import os
-from fastapi import APIRouter, FastAPI, WebSocket, Request
+from fastapi import (
+    APIRouter, FastAPI, WebSocket, Request, BackgroundTasks, HTTPException
+)
+import uuid
 
 chat = APIRouter()
 
@@ -9,8 +12,27 @@ chat = APIRouter()
 
 
 @chat.post("/token")
-async def token_generator(request: Request):
-    return None
+async def token_generator(name: str, request: Request):
+    """
+    Chat token generator
+
+    arg: client name
+    """
+
+    # Check to ensure the name field is not empty
+    if name == "":
+        raise HTTPException(status_code=400, detail={
+            "loc": "name", "msg": "Enter a valid name"
+        })
+    
+    # Generate a token using uuid4
+    token = str(uuid.uuid4())
+
+    # session data
+    data = {"name": name, "token": token}
+
+    # return the session data to the client
+    return data
 
 
 # @route    POST /refresh_token
