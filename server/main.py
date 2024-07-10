@@ -4,7 +4,7 @@ import uvicorn
 import os
 from dotenv import load_dotenv, find_dotenv
 
-from routes.chat import chat
+from src.routes.chat import chat
 
 # Find .env and load  variables from it
 _ = load_dotenv(find_dotenv())
