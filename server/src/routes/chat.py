@@ -1,11 +1,12 @@
 import os
 from fastapi import (
-    APIRouter, FastAPI, WebSocket, Request, BackgroundTasks, HTTPException,
-    WebSocketDisconnect
+    APIRouter, Depends, FastAPI, WebSocket, Request, BackgroundTasks,
+    HTTPException, WebSocketDisconnect
 )
 import uuid
 
 from ..socket.connection import ConnectionManager
+from ..socket.utils import get_token
 
 chat = APIRouter()
 
@@ -57,7 +58,9 @@ async def refresh_token(request: Request):
 
 
 @chat.websocket("/chat")
-async def websocket_endpint(websocket: WebSocket = WebSocket):
+async def websocket_endpint(
+    websocket: WebSocket = WebSocket, token: str = Depends(get_token)
+):
     # add the new websocket to the connction manager
     await manager.connect(websocket)
     try:
