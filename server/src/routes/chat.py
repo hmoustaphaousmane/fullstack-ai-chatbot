@@ -1,10 +1,16 @@
 import os
 from fastapi import (
-    APIRouter, FastAPI, WebSocket, Request, BackgroundTasks, HTTPException
+    APIRouter, FastAPI, WebSocket, Request, BackgroundTasks, HTTPException,
+    WebSocketDisconnect
 )
 import uuid
 
+from ..socket.connection import ConnectionManager
+
 chat = APIRouter()
+
+# initialize the connection manager
+manager = ConnectionManager()
 
 # @route    POST /token
 # @desc     Route to generate chat token
@@ -52,4 +58,21 @@ async def refresh_token(request: Request):
 
 @chat.websocket("/chat")
 async def websocket_endpint(websocket: WebSocket = WebSocket):
-    return None
+    # add the new websocket to the connction manager
+    await manager.connect(websocket)
+    try:
+        # run a while true loop to ensure the socket stays open
+        while True:
+            # receive any message sent by the client
+            data = await websocket.receive_text()
+            print(data)
+            # TODO: send the received message from the client the AI model,
+            # and send, the response from the AI model, back to the client
+
+            # send a hard coded response back to the client - for now
+            await manager.send_personal_message(
+                "Response: Simulating response from the GPT service.", websocket
+            )
+    # execept when the socket gets disconnected
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
