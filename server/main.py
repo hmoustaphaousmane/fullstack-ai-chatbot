@@ -4,12 +4,16 @@ import uvicorn
 import os
 from dotenv import load_dotenv, find_dotenv
 
+from routes.chat import chat
+
 # Find .env and load  variables from it
 _ = load_dotenv(find_dotenv())
 
 # Initialize FastAPI as api
 api = FastAPI()
 
+# connect chat router to the main API
+api.include_router(chat)
 
 # test route
 @api.get("/test")
