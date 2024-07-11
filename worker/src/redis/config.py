@@ -1,5 +1,5 @@
 import os
-import aioredis
+from redis import asyncio as aioredis
 from dotenv import load_dotenv, find_dotenv
 
 _ = load_dotenv(find_dotenv())
