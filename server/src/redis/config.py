@@ -1,4 +1,5 @@
 import os
+from rejson import Client
 from redis import asyncio as aioredis
 from dotenv import load_dotenv, find_dotenv
 
@@ -20,7 +21,20 @@ class Redis():
             self.connection_url, db=0
         )
         # except TimeoutError:
-            # pass
+        #    pass
 
         # Return the connection pool
         return self.connection
+
+    def create_rejson_connection(self):
+        """Method that allows to connect Redis with the rejson Client thus to
+        manipulate JSON data in Redis, which are not available in aioredis"""
+        self.redisJson = Client(
+            host=self.REDIS_HOST,
+            port=self.REDIS_PORT,
+            decode_response=True,
+            username=self.REDIS_USER,
+            password=self.REDIS_PASSWORD
+        )
+
+        return self.redisJson
