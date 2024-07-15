@@ -1,4 +1,5 @@
 import os
+from rejson import Path
 from fastapi import (
     APIRouter, Depends, FastAPI, WebSocket, Request, BackgroundTasks,
     HTTPException, WebSocketDisconnect
@@ -9,6 +10,7 @@ from ..socket.connection import ConnectionManager
 from ..socket.utils import get_token
 from ..redis.producer import Producer
 from ..redis.config import Redis
+from ..schema.chat import Chat
 
 chat = APIRouter()
 
@@ -39,12 +41,27 @@ async def token_generator(name: str, request: Request):
 
     # Generate a token using uuid4
     token = str(uuid.uuid4())
+    
+    # create redis JSON connection
+    json_client = redis.create_rejson_connection()
 
-    # session data
-    data = {"name": name, "token": token}
+    # create new chat session
+    chat_session = Chat(
+        token=token,
+        messages=[],
+        name=name
+    )
+
+    # store chat session in redis JSON with the to token as key
+    json_client.jsonset(str(token), Path.rootPath(), chat_session.model_dump())
+
+    # set a timeout for redis data
+    redis_client = await redis.create_connection()
+    await redis_client.expire(str(token), 3600)
+    # i.e. chat session data will be lost after 60 min
 
     # return the session data to the client
-    return data
+    return chat_session
 
 
 # @route    POST /refresh_token
