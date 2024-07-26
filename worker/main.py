@@ -9,6 +9,17 @@ async def main():
     redis = MyRedis()
     # create a rejon connection
     json_client = redis.create_rejson_connection()
+
+    # add a new message to the chat history
+    await Cache(json_client).add_message_to_cache(
+        token="1ea18262-d763-4bc8-86f2-e9c9fc419e98",
+        message_data={
+            "id": "1",
+            "msg": "Hello",
+            "timestamp": "2024-07-26 12:12:34:04.038491"
+        }
+    )
+
     data = await Cache(json_client).get_chat_history(
         token="1ea18262-d763-4bc8-86f2-e9c9fc419e98"
     )
