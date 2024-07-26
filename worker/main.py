@@ -1,11 +1,11 @@
 import asyncio
 
-from src.redis.config import Redis
+from src.redis.config import MyRedis
 
 
 async def main():
     # initialize Redis
-    redis = Redis()
+    redis = MyRedis()
     # create a Redis connection pool
     redis = await redis.create_connection()
     print(redis)
