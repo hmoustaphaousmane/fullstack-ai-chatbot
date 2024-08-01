@@ -11,6 +11,7 @@ from ..socket.utils import get_token
 from ..redis.producer import Producer
 from ..redis.config import MyRedis
 from ..schema.chat import Chat
+from ..redis.stream import StreamConsumer
 
 chat = APIRouter()
 
@@ -62,7 +63,7 @@ async def token_generator(name: str, request: Request):
     # i.e. chat session data will be lost after 60 min
 
     # return the session data to the client
-    return chat_session
+    return chat_session  #.model_dump
 
 
 # @route    POST /refresh_token
@@ -75,8 +76,8 @@ async def refresh_token(request: Request):
     return None
 
 
-# @route    Websoket /chat
-# @desc     Socket for chatbot
+# @route    Websocket /chat
+# @desc     Socket for chat bot
 # @access Public
 
 
@@ -93,6 +94,11 @@ async def websocket_endpint(
     # initialize a producer with redis_client
     producer = Producer(redis_client)
 
+    json_client = redis.create_rejson_connection()
+
+    # stream consumer instance
+    consumer = StreamConsumer(redis_client)
+
     try:
         # run a while true loop to ensure the socket stays open
         while True:
@@ -105,14 +111,41 @@ async def websocket_endpint(
             # initialize stream data dictionnary
             stream_data = {}
             # add `data` to `stream_data` with the key `token`
-            stream_data[token] = data
+            stream_data[str(token)] = str(data)
             # add `stream_data` to the stream using redis client `producer`
             await producer.add_to_stream(stream_data, "message_channel")
-            # send a hard coded response back to the client - for now
-            await manager.send_personal_message(
-                "Response: Simulating response from the GPT service.",
-                websocket
+            # # send a hard coded response back to the client - for now
+            # await manager.send_personal_message(
+            #     "Response: Simulating response from the GPT service.",
+            #     websocket
+            # )
+            response = await consumer.consume_stream(
+                stream_channel="response_channel", block=0
             )
+            print(response)
+
+            for stream, messages in response:
+                for message in messages:
+                    response_token = [
+                        k.decode('utf-8') for k, v in message[1].items()
+                    ][0]
+
+                    if token == response_token:
+                        response_message = [
+                            v.decode('utf-8') for k, v in message[1].items()
+                        ][0]
+
+                        print(message[0].decode('utf-8'))
+                        print(token)
+                        print(response_token)
+
+                        await manager.send_personal_message(
+                            response_message, websocket
+                        )
+                    await consumer.delete_message(
+                        stream_channel="response_channel",
+                        message_id=message[0].decode('utf-8')
+                    )
     # execept when the socket gets disconnected
     except WebSocketDisconnect:
         manager.disconnect(websocket)
