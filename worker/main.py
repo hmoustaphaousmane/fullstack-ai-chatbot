@@ -1,64 +1,90 @@
 import os
 import asyncio
 
-from dotenv import load_dotenv, find_dotenv
-_ = load_dotenv(find_dotenv())
-
 from src.redis.config import MyRedis
 from src.redis.cache import Cache
+from src.redis.stream import StreamConsumer
 from src.model.gptj import GPT
 from src.schema.chat import Message
 
+from dotenv import load_dotenv, find_dotenv
+_ = load_dotenv(find_dotenv())
+
+# initialize Redis
+redis = MyRedis()
+
 
 async def main():
-    # initialize Redis
-    redis = MyRedis()
     # create a rejon connection
     json_client = redis.create_rejson_connection()
 
-    # add a new message to the chat history
-    await Cache(json_client).add_message_to_cache(
-        token=os.getenv('token'),
-        source="human",
-        message_data={
-            "id": "1",
-            "msg": "Hello",
-            "timestamp": "2024-07-26 12:12:34:04.038491"
-        }
-    )
+    redis_client = await redis.create_connection()
+    consumer = StreamConsumer(redis_client)
+    cache = Cache(json_client)
 
-    data = await Cache(json_client).get_chat_history(
-        token=os.getenv('token')
-    )
-    # print(data)
+    print("Stream consumer started")
+    print("Stream waiting for new messages")
 
-    # trim the cache data to get the last 4 messages
-    message_data = data['messages']#[-4]
-    print(message_data)
+    # infinite loop to keep the connection to the message channel alive
+    while True:
+        # await for new messages from the message channel
+        response = await consumer.consume_stream(
+            stream_channel="message_channel", count=1, block=0
+        )
 
-    # extract the msg in a list
-    input = ["" + i['msg'] for i in message_data]
-    input = " ".join(input)  # join it to an empty string
+        # if we have a message in the queue
+        if response:
+            for stream, messages in response:
+                # get message from stream
+                for message in messages:
+                    # extract the message id
+                    message_id = message[0]
 
-    res = GPT().query(input=input)
+                    # extract the token
+                    token = [
+                        k.decode('utf-8') for k, v in message[1].items()
+                    ][0]
 
-    # create a new Message for the bot response
-    msg = Message(msg=res)
-    print(msg)
+                    # extract the message
+                    message = [
+                        v.decode('utf-8') for k,v in message[1].items()
+                    ][0]
 
-    # add the bot response to the cache specifying the source as "bot"
-    await Cache(json_client).add_message_to_cache(
-        token=os.getenv('token'),
-        source="bot",
-        message_data=dict(msg)  #.dict()
-    )
+                    print(token)
 
-    # # create a Redis connection pool
-    # redis = await redis.create_connection()
-    # print(redis)
+                    # create a new message instance
+                    msg = Message(msg=message)
 
-    # # set a simple key `key` and assing a string `value` to it
-    # await redis.set("key", "value")
+                    # add the message to the cache specifying the source human
+                    await cache.add_message_to_cache(
+                        token=token, source="human", message_data=dict(msg)
+                    )
+
+                    # get chat history from cache
+                    data = await cache.get_chat_history(token=token)
+
+                    # get the last 4 messages
+                    message_data = data['message'][-4]
+
+                    # clean message input and send to query
+                    input = ["" + i['msg'] for i in message_data]
+                    input = " ".join(input)
+
+                    res = GPT().query(input=input)
+
+                    # create a new Message for the bot response
+                    bot_msg = Message(msg=res)
+                    print(bot_msg)
+
+                    # add the bot response to the cache specifying the source as "bot"
+                    await cache(json_client).add_message_to_cache(
+                        token=token, source="bot", message_data=dict(bot_msg)
+                    )
+                
+                # delete the message from queue after it has been processed
+                await consumer.delete_message(
+                    stream_channel="message_channel", message_id=message_id
+                )
 
 if __name__ == "__main__":
     asyncio.run(main())
