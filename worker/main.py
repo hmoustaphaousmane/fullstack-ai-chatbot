@@ -4,6 +4,7 @@ import asyncio
 from src.redis.config import MyRedis
 from src.redis.cache import Cache
 from src.redis.stream import StreamConsumer
+from src.redis.producer import Producer
 from src.model.gptj import GPT
 from src.schema.chat import Message
 
@@ -21,6 +22,9 @@ async def main():
     redis_client = await redis.create_connection()
     consumer = StreamConsumer(redis_client)
     cache = Cache(json_client)
+
+    # create an instance of producer
+    producer = Producer(redis_client)
 
     print("Stream consumer started")
     print("Stream waiting for new messages")
@@ -75,6 +79,13 @@ async def main():
                     # create a new Message for the bot response
                     bot_msg = Message(msg=res)
                     print(bot_msg)
+
+                    stream_data = {}
+                    stream_data[str(token)] = str(dict(msg))
+
+                    await producer.add_to_stream(
+                        stream_data, "response_channel"
+                    )
 
                     # add the bot response to the cache specifying the source as "bot"
                     await cache(json_client).add_message_to_cache(
